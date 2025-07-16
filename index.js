@@ -29,7 +29,6 @@ app.use((req, res, next) => {
     next();
 });
 
-
 app.use('/images', (req, res, next) => {
     const imagePath = path.join(__dirname, 'public/images', req.path);
 
@@ -45,23 +44,12 @@ app.use('/images', (req, res, next) => {
     })
 });
 
-
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
-
 
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri);
-let db
+let db;
 
-async function connectToDatabase(){
-    try{
-        await client.connect();
-        db = client.db('lessonshop'); 
-        console.log('Connected to Mongo db atlas');
-    }catch(error){
-        console.error('MongoDB connection error:', error)
-    }
-}
 async function startServer() {
     try {
         await client.connect();
@@ -69,154 +57,150 @@ async function startServer() {
         console.log('Connected to Mongo db atlas');
 
         app.get('/api/lessons', async (req, res) => {
-    try{
-        const lessons = await db.collection('lessons').find({}).toArray();
-        res.json(lessons);
-    }catch(error){
-        res.status(500).json({message:error.message});
-    }
-});
-
-startServer();
-
-
-app.put('/api/lessons/:id', async (req, res) => {
-    try {
-        const lessonId = req.params.id;
-
-        if (!ObjectId.isValid(lessonId)) {
-            return res.status(400).json({ message: "Invalid ID format" });
-        }
-        const result = await db.collection('lessons').updateOne(
-            { _id: new ObjectId(lessonId) },
-            { $set: req.body }
-        );
-
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ message: "Lesson not found" });
-        }
-        const updatedLesson = await db.collection('lessons').findOne(
-            { _id: new ObjectId(lessonId) }
-        );
-
-        res.status(200).json(updatedLesson);
-    } catch (error) {
-        res.status(500).json({ message: "Internal Server Error", error: error.message });
-    }
-});
-
-app.post('/api/orders', async (req, res) => {
-    try {
-        const order = {
-            name: req.body.name,
-            phoneNumber: req.body.phoneNumber,
-            lessonIds: req.body.lessonIds.map(id => new ObjectId(id)),
-            spaces: req.body.spaces,
-            orderDate: new Date()
-        };
-
-        const result = await db.collection('orders').insertOne(order);
-        res.status(201).json({ ...order, _id: result.insertedId });
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
-});
-
-app.get('/api/orders', async (req, res) => {
-    try {
-        const orders = await db.collection('orders').aggregate([
-            {
-                $lookup: {
-                    from: 'lessons',
-                    localField: 'lessonIds',
-                    foreignField: '_id',
-                    as: 'lessons'
-                }
+            try{
+                const lessons = await db.collection('lessons').find({}).toArray();
+                res.json(lessons);
+            }catch(error){
+                res.status(500).json({message:error.message});
             }
-        ]).toArray();
-        res.json(orders);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-app.delete('/api/orders/:id', async (req, res) => {
-    try {
-        const order = await db.collection('orders').findOne({
-            _id: new ObjectId(req.params.id)
         });
 
-        if (!order) {
-            return res.status(404).json({ message: "Order not found" });
-        }
+        app.put('/api/lessons/:id', async (req, res) => {
+            try {
+                const lessonId = req.params.id;
 
-        for (const lessonId of order.lessonIds) {
-            await db.collection('lessons').updateOne(
-                { _id: lessonId },
-                { $inc: { spaces: 1 } } 
-            );
-        }
+                if (!ObjectId.isValid(lessonId)) {
+                    return res.status(400).json({ message: "Invalid ID format" });
+                }
+                const result = await db.collection('lessons').updateOne(
+                    { _id: new ObjectId(lessonId) },
+                    { $set: req.body }
+                );
 
-        const result = await db.collection('orders').deleteOne({
-            _id: new ObjectId(req.params.id)
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({ message: "Lesson not found" });
+                }
+                const updatedLesson = await db.collection('lessons').findOne(
+                    { _id: new ObjectId(lessonId) }
+                );
+
+                res.status(200).json(updatedLesson);
+            } catch (error) {
+                res.status(500).json({ message: "Internal Server Error", error: error.message });
+            }
         });
 
-        res.json({ message: "Order deleted and lesson spaces updated" });
-    } catch (error) {
-        console.error('Error deleting order:', error);
-        res.status(500).json({ message: error.message });
-    }
-});
+        app.post('/api/orders', async (req, res) => {
+            try {
+                const order = {
+                    name: req.body.name,
+                    phoneNumber: req.body.phoneNumber,
+                    lessonIds: req.body.lessonIds.map(id => new ObjectId(id)),
+                    spaces: req.body.spaces,
+                    orderDate: new Date()
+                };
 
+                const result = await db.collection('orders').insertOne(order);
+                res.status(201).json({ ...order, _id: result.insertedId });
+            } catch (error) {
+                res.status(400).json({ message: error.message });
+            }
+        });
 
-app.get('/api/search', async (req, res) => {
-    try {
-        const query = req.query.q;
-        
-        if (!query || query.trim() === '') {
-            return res.status(400).json({ message: 'Search query is required' });
-        }
+        app.get('/api/orders', async (req, res) => {
+            try {
+                const orders = await db.collection('orders').aggregate([
+                    {
+                        $lookup: {
+                            from: 'lessons',
+                            localField: 'lessonIds',
+                            foreignField: '_id',
+                            as: 'lessons'
+                        }
+                    }
+                ]).toArray();
+                res.json(orders);
+            } catch (error) {
+                res.status(500).json({ message: error.message });
+            }
+        });
 
-        // Create a case-insensitive regex search pattern
-        const searchRegex = new RegExp(query, 'i');
-        
-        // Example search across multiple fields - adjust based on your data structure
-        const searchResults = await db.collection('lessons').find({
-            $or: [
-                { subject: searchRegex },
-                { location: searchRegex },
-                { description: searchRegex }
-            ]
-        }).limit(20).toArray();
+        app.delete('/api/orders/:id', async (req, res) => {
+            try {
+                const order = await db.collection('orders').findOne({
+                    _id: new ObjectId(req.params.id)
+                });
 
-        res.json(searchResults);
-    } catch (error) {
-        console.error('Search error:', error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-});
+                if (!order) {
+                    return res.status(404).json({ message: "Order not found" });
+                }
 
-app.get('/test-image/:imageName', (req,res) => {
-    res.redirect(`/images/${req.params.imageName}`);
-});
+                for (const lessonId of order.lessonIds) {
+                    await db.collection('lessons').updateOne(
+                        { _id: lessonId },
+                        { $inc: { spaces: 1 } } 
+                    );
+                }
 
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ message: 'Something went wrong!' });
-});
+                const result = await db.collection('orders').deleteOne({
+                    _id: new ObjectId(req.params.id)
+                });
 
-process.on('SIGINT', async () => {
-    try {
-        await client.close();
-        console.log('MongoDB connection closed.');
-        process.exit(0);
-    } catch (error) {
-        console.error('Error during shutdown:', error);
-        process.exit(1);
-    }
-});
+                res.json({ message: "Order deleted and lesson spaces updated" });
+            } catch (error) {
+                console.error('Error deleting order:', error);
+                res.status(500).json({ message: error.message });
+            }
+        });
 
-const PORT = process.env.PORT || 3000;
+        app.get('/api/search', async (req, res) => {
+            try {
+                const query = req.query.q;
+                
+                if (!query || query.trim() === '') {
+                    return res.status(400).json({ message: 'Search query is required' });
+                }
+
+                // Create a case-insensitive regex search pattern
+                const searchRegex = new RegExp(query, 'i');
+                
+                // Example search across multiple fields - adjust based on your data structure
+                const searchResults = await db.collection('lessons').find({
+                    $or: [
+                        { subject: searchRegex },
+                        { location: searchRegex },
+                        { description: searchRegex }
+                    ]
+                }).limit(20).toArray();
+
+                res.json(searchResults);
+            } catch (error) {
+                console.error('Search error:', error);
+                res.status(500).json({ message: 'Internal server error' });
+            }
+        });
+
+        app.get('/test-image/:imageName', (req,res) => {
+            res.redirect(`/images/${req.params.imageName}`);
+        });
+
+        app.use((err, req, res, next) => {
+            console.error(err.stack);
+            res.status(500).json({ message: 'Something went wrong!' });
+        });
+
+        process.on('SIGINT', async () => {
+            try {
+                await client.close();
+                console.log('MongoDB connection closed.');
+                process.exit(0);
+            } catch (error) {
+                console.error('Error during shutdown:', error);
+                process.exit(1);
+            }
+        });
+
+        const PORT = process.env.PORT || 3000;
         app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
         });
@@ -225,3 +209,5 @@ const PORT = process.env.PORT || 3000;
         process.exit(1);
     }
 }
+
+startServer();
