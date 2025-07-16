@@ -76,6 +76,8 @@ async function startServer() {
         res.status(500).json({message:error.message});
     }
 });
+startServer();
+
 
 app.put('/api/lessons/:id', async (req, res) => {
     try {
@@ -194,5 +196,3 @@ const PORT = process.env.PORT || 3000;
         process.exit(1);
     }
 }
-
-startServer();
