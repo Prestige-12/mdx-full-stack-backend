@@ -76,6 +76,7 @@ async function startServer() {
         res.status(500).json({message:error.message});
     }
 });
+
 startServer();
 
 
@@ -164,6 +165,34 @@ app.delete('/api/orders/:id', async (req, res) => {
     } catch (error) {
         console.error('Error deleting order:', error);
         res.status(500).json({ message: error.message });
+    }
+});
+
+
+app.get('/api/search', async (req, res) => {
+    try {
+        const query = req.query.q;
+        
+        if (!query || query.trim() === '') {
+            return res.status(400).json({ message: 'Search query is required' });
+        }
+
+        // Create a case-insensitive regex search pattern
+        const searchRegex = new RegExp(query, 'i');
+        
+        // Example search across multiple fields - adjust based on your data structure
+        const searchResults = await db.collection('lessons').find({
+            $or: [
+                { subject: searchRegex },
+                { location: searchRegex },
+                { description: searchRegex }
+            ]
+        }).limit(20).toArray();
+
+        res.json(searchResults);
+    } catch (error) {
+        console.error('Search error:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 
